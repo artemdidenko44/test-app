@@ -5,6 +5,7 @@ import * as React from "react";
 
 import { Header } from "./header";
 import { SearchForm } from "./search-form";
+import { Card } from "./ui/card";
 import { useSearchTours } from "../hooks/use-search-tours";
 
 type GeoType = "country" | "city" | "hotel";
@@ -20,12 +21,24 @@ type HotelDto = {
   readonly cityId: number | string;
 };
 
+type HotelInfoDto = {
+  readonly id: number | string;
+  readonly name: string;
+  readonly img: string;
+  readonly cityId: number | string;
+  readonly cityName: string;
+  readonly countryId: string;
+  readonly countryName: string;
+};
+
 export const HomeClient = () => {
   const { status, tours, resultCountryId, error, searchTours } = useSearchTours();
   const [draftGeo, setDraftGeo] = React.useState<SelectedGeo | null>(null);
   const [appliedGeo, setAppliedGeo] = React.useState<SelectedGeo | null>(null);
   const [pendingGeo, setPendingGeo] = React.useState<SelectedGeo | null>(null);
   const [hotelIdsForCity, setHotelIdsForCity] = React.useState<readonly string[] | null>(null);
+  const [hotelsIndex, setHotelsIndex] = React.useState<Record<string, HotelInfoDto> | null>(null);
+  const hotelsIndexCacheRef = React.useRef<Map<string, Record<string, HotelInfoDto>>>(new Map());
   const hotelsLoadIdRef = React.useRef<number>(0);
   const loadHotelsForCity = React.useCallback(async ({ countryId, cityId }: { readonly countryId: string; readonly cityId: string }): Promise<void> => {
     const loadId: number = hotelsLoadIdRef.current + 1;
@@ -79,6 +92,26 @@ export const HomeClient = () => {
     if (nextPendingGeo) setPendingGeo(nextPendingGeo);
     searchTours(countryId);
   }, [appliedGeo, draftGeo, searchTours]);
+  React.useEffect(() => {
+    if (status !== "success") return;
+    if (!resultCountryId) return;
+    const cached: Record<string, HotelInfoDto> | undefined = hotelsIndexCacheRef.current.get(resultCountryId);
+    if (cached) {
+      setHotelsIndex(cached);
+      return;
+    }
+    void (async (): Promise<void> => {
+      try {
+        const { getHotels } = await import("../app/api/api");
+        const resp: Response = await getHotels(resultCountryId);
+        const data = (await resp.json()) as Record<string, HotelInfoDto>;
+        hotelsIndexCacheRef.current.set(resultCountryId, data);
+        setHotelsIndex(data);
+      } catch {
+        setHotelsIndex(null);
+      }
+    })();
+  }, [resultCountryId, status]);
   return (
     <div className="min-h-screen bg-background">
       <Header
@@ -99,9 +132,6 @@ export const HomeClient = () => {
         {status === "loading" && (
           <div className="mb-4 text-sm text-muted-foreground">Завантаження...</div>
         )}
-        {status === "success" && isCityFilterLoading && (
-          <div className="mb-4 text-sm text-muted-foreground">Фільтруємо за містом...</div>
-        )}
         {status === "error" && (
           <div className="mb-4 text-sm text-red-500">{error ?? "Помилка"}</div>
         )}
@@ -114,14 +144,25 @@ export const HomeClient = () => {
             <span>Немає доступних турів</span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredTours.map((tour) => (
-              <div key={tour.id} className="rounded-lg border border-black/[.08] p-4 dark:border-white/[.145]">
-                <div className="text-sm text-muted-foreground">Hotel ID: {tour.hotelId}</div>
-                <div className="mt-2 text-lg font-semibold">{tour.priceText}</div>
-                <div className="mt-2 text-sm">{tour.dateText}</div>
-              </div>
-            ))}
+          <div className="mx-auto grid w-full max-w-[500px] grid-cols-1 gap-4 sm:grid-cols-[repeat(2,minmax(250px,1fr))]">
+            {filteredTours.map((tour, index) => {
+              const hotel: HotelInfoDto | null = hotelsIndex?.[tour.hotelId] ?? null;
+              const isWideCard: boolean = index === 0;
+              const cardClassName: string = isWideCard ? "sm:col-span-2" : "";
+              const imageSrc: string | undefined = hotel?.img;
+              const imageAlt: string = hotel?.name ?? `Hotel ${tour.hotelId}`;
+              const hotelName: string = hotel?.name ?? `Hotel ${tour.hotelId}`;
+              const countryName: string = hotel?.countryName ?? "—";
+              const cityName: string = hotel?.cityName ?? "—";
+              return (
+                <Card key={tour.id} imageSrc={imageSrc} imageAlt={imageAlt} className={cardClassName}>
+                  <div className="text-base font-semibold leading-tight">{hotelName}</div>
+                  <div className="text-sm text-muted-foreground">{countryName} · {cityName}</div>
+                  <div className="text-sm">{tour.dateText}</div>
+                  <div className="text-lg font-semibold">{tour.priceText}</div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </main>

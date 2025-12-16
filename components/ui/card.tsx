@@ -1,8 +1,7 @@
 import * as React from "react";
-import Image from "next/image";
 
 type CardProps = {
-  imageSrc: string;
+  imageSrc?: string;
   imageAlt: string;
   children: React.ReactNode;
   className?: string;
@@ -26,13 +25,17 @@ export function Card({
       )}
     >
       <div className="relative aspect-[4/3] w-full">
-        <Image
-          src={imageSrc}
-          alt={imageAlt}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 400px"
-        />
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt={imageAlt}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="h-full w-full bg-muted" />
+        )}
       </div>
 
       <div className="p-4 space-y-2">
