@@ -46,7 +46,7 @@ export const HomeClient = () => {
       />
       <main className="mx-auto max-w-7xl px-4 py-8">
         {status === "loading" && (
-          <div className="mb-4 text-sm text-muted-foreground">Завантаження...</div>
+          <div className="mb-4 w-full text-center text-sm text-muted-foreground">Завантаження...</div>
         )}
         {status === "error" && (
           <div className="mb-4 text-sm text-red-500">{error ?? "Помилка"}</div>
