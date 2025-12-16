@@ -226,19 +226,6 @@ export const getCountries = () => {
   return Promise.resolve(response);
 };
 
-export const getCities = () => {
-  const cities = db.getCities();
-
-  const response = new Response(JSON.stringify(cities), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  return Promise.resolve(response);
-};
-
 export const searchGeo = (string) => {
   const addType = (type) => (entity) => ({ ...entity, type });
 
@@ -415,19 +402,6 @@ export const stopSearchPrices = (token) => {
 
 export const getHotels = (countryID) => {
   const hotels = db.getHotelsByCountryID(countryID);
-
-  const response = new Response(JSON.stringify(hotels), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-
-  return Promise.resolve(response);
-};
-
-export const getHotelsAll = () => {
-  const hotels = db.getHotels();
 
   const response = new Response(JSON.stringify(hotels), {
     status: 200,

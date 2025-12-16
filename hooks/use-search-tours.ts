@@ -47,6 +47,8 @@ type UseSearchToursResult = {
   readonly tours: readonly TourViewModel[];
   readonly resultCountryId: string | null;
   readonly error?: string;
+  readonly isSearchDisabled: boolean;
+  readonly onSearchParamsChange: (countryId: string | null) => void;
   readonly searchTours: (countryId: string) => void;
 };
 
@@ -91,18 +93,17 @@ export const useSearchTours = (): UseSearchToursResult => {
   const [cachedSearchResult, setCachedSearchResult] = React.useState<CachedSearchResult | null>(null);
   const [resultCountryId, setResultCountryId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const [draftCountryId, setDraftCountryId] = React.useState<string | null>(null);
   const sessionIdRef = React.useRef<number>(0);
   const tokenRef = React.useRef<string | null>(null);
   const timeoutIdRef = React.useRef<number | null>(null);
   const activeCountryIdRef = React.useRef<string | null>(null);
   const tours: readonly TourViewModel[] = React.useMemo(() => selectToursViewModels(toursRaw), [toursRaw]);
-
   const cancelPolling = React.useCallback((): void => {
     if (timeoutIdRef.current === null) return;
     window.clearTimeout(timeoutIdRef.current);
     timeoutIdRef.current = null;
   }, []);
-
   React.useEffect(() => {
     return () => {
       cancelPolling();
@@ -110,7 +111,6 @@ export const useSearchTours = (): UseSearchToursResult => {
       tokenRef.current = null;
     };
   }, [cancelPolling]);
-
   const schedule = React.useCallback(
     ({ delayMs, run }: { readonly delayMs: number; readonly run: () => void }): void => {
       cancelPolling();
@@ -118,7 +118,28 @@ export const useSearchTours = (): UseSearchToursResult => {
     },
     [cancelPolling]
   );
-
+  const onSearchParamsChange = React.useCallback((countryId: string | null): void => {
+    setDraftCountryId(countryId);
+  }, []);
+  const beginNewSession = React.useCallback(
+    ({ cancelToken }: { readonly cancelToken: string | null }): number => {
+      cancelPolling();
+      const nextSessionId: number = sessionIdRef.current + 1;
+      sessionIdRef.current = nextSessionId;
+      tokenRef.current = null;
+      if (cancelToken) {
+        void (async (): Promise<void> => {
+          try {
+            const { stopSearchPrices } = await import("../app/api/api");
+            await stopSearchPrices(cancelToken);
+          } catch {
+          }
+        })();
+      }
+      return nextSessionId;
+    },
+    [cancelPolling]
+  );
   const pollToken = React.useCallback(
     async ({ token, sessionId, delayMs, retries, countryId }: { readonly token: string; readonly sessionId: number; readonly delayMs: number; readonly retries: number; readonly countryId: string }): Promise<void> => {
       if (tokenRef.current !== token) return;
@@ -161,13 +182,11 @@ export const useSearchTours = (): UseSearchToursResult => {
     },
     [schedule]
   );
-
   const searchTours = React.useCallback(
     (countryId: string): void => {
       if (cachedSearchResult?.countryId === countryId) {
-        cancelPolling();
-        sessionIdRef.current += 1;
-        tokenRef.current = null;
+        const cancelToken: string | null = tokenRef.current;
+        if (status === "loading") beginNewSession({ cancelToken });
         setToursRaw(cachedSearchResult.toursRaw);
         setResultCountryId(countryId);
         setStatus("success");
@@ -176,10 +195,8 @@ export const useSearchTours = (): UseSearchToursResult => {
         return;
       }
       if (status === "loading" && activeCountryIdRef.current === countryId) return;
-      const sessionId: number = sessionIdRef.current + 1;
-      sessionIdRef.current = sessionId;
-      tokenRef.current = null;
-      cancelPolling();
+      const cancelToken: string | null = tokenRef.current;
+      const sessionId: number = beginNewSession({ cancelToken });
       setStatus("loading");
       setError(undefined);
       activeCountryIdRef.current = countryId;
@@ -187,10 +204,19 @@ export const useSearchTours = (): UseSearchToursResult => {
         try {
           const { startSearchPrices } = await import("../app/api/api");
           const resp: Response = await startSearchPrices(countryId);
-          if (sessionIdRef.current !== sessionId) return;
           const data = (await resp.json()) as StartSearchResponseDto;
           const token: string = data.token;
           const delayMs: number = getDelayMs({ delay: data.delay, waitUntil: data.waitUntil });
+          if (sessionIdRef.current !== sessionId) {
+            void (async (): Promise<void> => {
+              try {
+                const { stopSearchPrices } = await import("../app/api/api");
+                await stopSearchPrices(token);
+              } catch {
+              }
+            })();
+            return;
+          }
           tokenRef.current = token;
           schedule({ delayMs, run: () => { void pollToken({ token, sessionId, delayMs, retries: 0, countryId }); } });
         } catch (err: unknown) {
@@ -200,7 +226,8 @@ export const useSearchTours = (): UseSearchToursResult => {
         }
       })();
     },
-    [cachedSearchResult, cancelPolling, pollToken, schedule, status]
+    [beginNewSession, cachedSearchResult, pollToken, schedule, status]
   );
-  return { status, tours, resultCountryId, error, searchTours };
+  const isSearchDisabled: boolean = status === "loading" && draftCountryId !== null && draftCountryId === activeCountryIdRef.current;
+  return { status, tours, resultCountryId, error, isSearchDisabled, onSearchParamsChange, searchTours };
 };
