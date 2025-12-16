@@ -9,11 +9,8 @@ type InputOwnProps = {
   error?: boolean;
 };
 
-type PolymorphicProps<E extends React.ElementType, P> =
-  P &
-  Omit<React.ComponentPropsWithoutRef<E>, keyof P> & {
-    as?: E;
-  };
+type InputProps = InputOwnProps &
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "size">;
 
 function cn(...classes: (string | undefined)[]) {
   return classes.filter(Boolean).join(" ");
@@ -51,25 +48,17 @@ const inputVariants = ({
   return cn(base, variants[variant], sizes[size], errorStyles);
 };
 
-function Input<E extends React.ElementType = "input">({
-  as,
-  className,
-  variant,
-  size,
-  error = false,
-  ...props
-}: PolymorphicProps<E, InputOwnProps>) {
-  const Comp = as || "input";
-
+const Input = React.forwardRef<HTMLInputElement, InputProps>(function InputInner(
+  { className, variant, size, error = false, ...props }: InputProps,
+  ref
+) {
   return (
-    <Comp
-      className={cn(
-        inputVariants({ variant, size, error }),
-        className
-      )}
+    <input
+      ref={ref}
+      className={cn(inputVariants({ variant, size, error }), className)}
       {...props}
     />
   );
-}
+});
 
 export { Input, inputVariants };

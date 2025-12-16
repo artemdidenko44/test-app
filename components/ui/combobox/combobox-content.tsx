@@ -18,7 +18,7 @@ export function ComboboxContent({
   return (
     <PopoverContent
       className={[
-        "min-w-[340px] rounded-md bg-background p-2 shadow-md",
+        "min-w-[370px] rounded-md bg-background p-2 shadow-md",
         className,
       ]
         .filter(Boolean)

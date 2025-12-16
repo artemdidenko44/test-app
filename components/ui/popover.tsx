@@ -61,7 +61,8 @@ function Popover({
   const floating = useFloating({
     open,
     onOpenChange: setOpen,
-    middleware: [offset(8), flip(), shift({ padding: 8 })],
+    placement: "bottom-start",
+    middleware: [offset({ mainAxis: 8, crossAxis: -8 }), flip(), shift({ padding: 8 })],
     whileElementsMounted: autoUpdate,
   });
 
