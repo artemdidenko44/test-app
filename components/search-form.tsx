@@ -25,6 +25,13 @@ type GeoItem = {
   id: string;
   name: string;
   type: GeoType;
+  countryId?: string;
+};
+
+type SelectedGeo = {
+  readonly id: string;
+  readonly type: GeoType;
+  readonly countryId: string;
 };
 
 type CountryDto = {
@@ -35,17 +42,32 @@ type CountryDto = {
 type CityDto = {
   readonly id: number | string;
   readonly name: string;
+  readonly countryId: string;
 };
 
 type HotelDto = {
   readonly id: number | string;
   readonly name: string;
+  readonly countryId: string;
 };
 
-export function SearchForm() {
+type SearchGeoItemDto = {
+  readonly id: number | string;
+  readonly name: string;
+  readonly type: GeoType;
+  readonly countryId?: string;
+};
+
+type SearchFormProps = {
+  readonly onSearchTours?: (countryId: string) => void;
+  readonly onSelectedGeoChange?: (geo: SelectedGeo | null) => void;
+};
+
+export function SearchForm({ onSearchTours, onSelectedGeoChange }: SearchFormProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [items, setItems] = React.useState<GeoItem[]>([]);
   const [selectedItem, setSelectedItem] = React.useState<GeoItem | null>(null);
+  const formRef = React.useRef<HTMLFormElement | null>(null);
 
   const loadCountries = React.useCallback(async () => {
     const res = await getCountries();
@@ -54,6 +76,7 @@ export function SearchForm() {
       id: c.id,
       name: c.name,
       type: "country",
+      countryId: c.id,
     }));
 
     setItems(countries);
@@ -66,6 +89,7 @@ export function SearchForm() {
       id: String(c.id),
       name: c.name,
       type: "city",
+      countryId: c.countryId,
     }));
     setItems(cities);
   }, []);
@@ -77,6 +101,7 @@ export function SearchForm() {
       id: String(h.id),
       name: h.name,
       type: "hotel",
+      countryId: h.countryId,
     }));
     setItems(hotels);
   }, []);
@@ -87,19 +112,13 @@ export function SearchForm() {
         loadCountries();
         return;
       }
-
       try {
         const res = await searchGeo(value);
-        const data = await res.json();
-
-        const results: GeoItem[] = Object.values(data).map(
-          (item: any) => ({
-            id: item.id,
-            name: item.name,
-            type: item.type,
-          })
-        );
-
+        const data = (await res.json()) as Record<string, SearchGeoItemDto>;
+        const results: GeoItem[] = Object.values(data).map((item: SearchGeoItemDto) => {
+          const countryId: string | undefined = item.type === "country" ? String(item.id) : item.countryId;
+          return { id: String(item.id), name: item.name, type: item.type, countryId };
+        });
         setItems(results);
       } catch {
         setItems([]);
@@ -139,10 +158,13 @@ export function SearchForm() {
   return (
     <Combobox onOpenChange={handleComboboxOpenChange}>
       <form
+        ref={formRef}
         className="flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          console.log("Search submit:", inputValue);
+          const countryId: string | undefined = selectedItem?.countryId;
+          if (!countryId) return;
+          onSearchTours?.(countryId);
         }}
       >
         <ComboboxTrigger>
@@ -152,10 +174,12 @@ export function SearchForm() {
             onValueChange={(value) => {
               setInputValue(value);
               setSelectedItem(null);
+              onSelectedGeoChange?.(null);
               handleSearch(value);
             }}
             onSubmit={(value) => {
-              console.log("Search submit:", value);
+              if (!value) return;
+              formRef.current?.requestSubmit();
             }}
           />
         </ComboboxTrigger>
@@ -177,6 +201,11 @@ export function SearchForm() {
               onSelect={() => {
                 setSelectedItem(item);
                 setInputValue(item.name);
+                if (!item.countryId) {
+                  onSelectedGeoChange?.(null);
+                  return;
+                }
+                onSelectedGeoChange?.({ id: item.id, type: item.type, countryId: item.countryId });
               }}
             >
               <span className="flex items-center gap-2">
